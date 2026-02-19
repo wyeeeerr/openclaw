@@ -1,0 +1,55 @@
+name: Sync Fork with Upstream
+
+# 触发条件
+on:
+  # 1. 定时触发：每天 UTC 时间 0:00 运行，即北京时间早上 8:00
+  schedule:
+    - cron: '0 0 * * *' # 每天凌晨0点UTC [citation:3]
+
+  # 2. 手动触发：方便你随时测试或立即同步
+  workflow_dispatch:
+
+# 定义任务
+jobs:
+  sync:
+    # 任务名称
+    name: Sync upstream commits
+    # 运行环境
+    runs-on: ubuntu-latest
+    # 权限设置，需要写入权限才能将更新推回你的 fork
+    permissions:
+      contents: write
+
+    steps:
+      # 步骤1：检出你的 fork 仓库代码
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          # 使用 GitHub 自动提供的 token 进行认证
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # 将分支设置为你要同步的目标分支，通常是 'main' 或 'master'
+          ref: main
+
+      # 步骤2：配置 Git 用户信息 (这一步是必需的，否则无法提交)
+      - name: Configure Git user
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      # 步骤3：添加上游仓库地址并同步
+      - name: Sync from upstream
+        env:
+          # 重要：请替换下面的 '原作者/原仓库名' 为你要同步的原始项目地址
+          UPSTREAM_REPO: 'https://github.com/openclaw/openclaw.git'
+          UPSTREAM_BRANCH: 'main' # 上游仓库的默认分支，通常是 'main' 或 'master'
+          TARGET_BRANCH: 'main'   # 你的 fork 仓库的目标分支
+        run: |
+          # 添加上游仓库，命名为 'upstream'
+          git remote add upstream $UPSTREAM_REPO
+          # 获取上游仓库的所有更新
+          git fetch upstream $UPSTREAM_BRANCH
+          # 尝试将上游的更新合并到你的当前分支
+          git checkout $TARGET_BRANCH
+          git merge upstream/$UPSTREAM_BRANCH --allow-unrelated-histories --no-edit
+          # 将合并后的代码推送到你的 fork 仓库 (origin)
+          git push origin $TARGET_BRANCH
